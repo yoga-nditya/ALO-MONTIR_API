@@ -9,69 +9,76 @@ use Illuminate\Http\Request;
 
 class TransactionController extends Controller
 {
-    public function index(Request $request)
-    {
-        $userId = $request->query('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID is required'
-            ], 400);
-        }
-
-        // Get regular transactions with consistent date format
-        $transactions = Transaction::with('service')
-            ->where('user_id', $userId)
-            ->orderBy('date', 'desc')
-            ->get()
-            ->map(function ($t) {
-                return [
-                    'id' => $t->id,
-                    'date' => $t->date->format('Y-m-d H:i:s'), // Format konsisten
-                    'display_date' => $t->date->format('d M Y'), // Untuk tampilan
-                    'amount' => $t->amount,
-                    'formatted_amount' => 'Rp ' . number_format($t->amount, 0, ',', '.'),
-                    'service_name' => $t->service->name ?? 'Service',
-                    'type' => 'regular',
-                    'icon' => $t->service->icon ?? 'build',
-                    'color' => '#F57C00'
-                ];
-            });
-
-        // Get emergency requests with consistent date format
-        $emergencies = EmergencyRequest::where('user_id', $userId)
-            ->orderBy('request_date', 'desc')
-            ->get()
-            ->map(function ($e) {
-                return [
-                    'id' => 'emergency_' . $e->id,
-                    'date' => $e->request_date->format('Y-m-d H:i:s'), // Format konsisten
-                    'display_date' => $e->request_date->format('d M Y'), // Untuk tampilan
-                    'amount' => $e->amount,
-                    'formatted_amount' => 'Rp ' . number_format($e->amount, 0, ',', '.'),
-                    'service_name' => $e->service_name,
-                    'type' => 'emergency',
-                    'icon' => 'warning',
-                    'color' => '#FF5252',
-                    'status' => $e->status
-                ];
-            });
-
-        // Combine and sort by date
-        $allTransactions = $transactions->merge($emergencies)
-            ->sortByDesc(function ($item) {
-                return $item['date'];
-            })
-            ->values();
-
-        return response()->json($allTransactions);
-    }
-
     public function getUserTransactions($userId)
     {
-        // Reuse the same logic as index but with direct user ID
-        return $this->index(new Request(['user_id' => $userId]));
+        try {
+            // Validasi user ID
+            if (!is_numeric($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User ID harus berupa angka'
+                ], 400);
+            }
+
+            // Get regular transactions
+            $transactions = Transaction::with('service')
+                ->where('user_id', $userId)
+                ->orderBy('date', 'desc')
+                ->get()
+                ->map(function ($t) {
+                    return [
+                        'id' => $t->id,
+                        'date' => $t->date->format('Y-m-d H:i:s'),
+                        'display_date' => $t->date->format('d M Y'),
+                        'amount' => $t->amount,
+                        'formatted_amount' => 'Rp ' . number_format($t->amount, 0, ',', '.'),
+                        'service_name' => $t->service->name ?? 'Service',
+                        'type' => 'regular',
+                        'icon' => $t->service->icon ?? 'build',
+                        'color' => '#F57C00'
+                    ];
+                });
+
+            // Get emergency requests
+            $emergencies = EmergencyRequest::where('user_id', $userId)
+                ->orderBy('request_date', 'desc')
+                ->get()
+                ->map(function ($e) {
+                    return [
+                        'id' => 'emergency_' . $e->id,
+                        'date' => $e->request_date->format('Y-m-d H:i:s'),
+                        'display_date' => $e->request_date->format('d M Y'),
+                        'amount' => $e->amount,
+                        'formatted_amount' => 'Rp ' . number_format($e->amount, 0, ',', '.'),
+                        'service_name' => $e->service_name,
+                        'type' => 'emergency',
+                        'icon' => 'warning',
+                        'color' => '#FF5252',
+                        'status' => $e->status
+                    ];
+                });
+
+            // Combine and sort
+            $allTransactions = $transactions->merge($emergencies)
+                ->sortByDesc(function ($item) {
+                    return $item['date'];
+                })
+                ->values()
+                ->all(); // Convert to array
+
+            return response()->json([
+                'success' => true,
+                'data' => $allTransactions
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan server: ' . $e->getMessage()
+            ], 500);
+        }
     }
+
 
     public function store(Request $request)
     {
