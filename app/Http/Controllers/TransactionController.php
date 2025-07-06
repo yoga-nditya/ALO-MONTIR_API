@@ -11,25 +11,54 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         $userId = $request->query('user_id');
+        
+        if (!$userId) {
+            return response()->json([
+                'message' => 'User ID is required'
+            ], 400);
+        }
 
+        // Get regular transactions
         $transactions = Transaction::with('service')
-            ->when($userId, function ($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })
+            ->where('user_id', $userId)
             ->orderBy('date', 'desc')
             ->get()
             ->map(function ($t) {
                 return [
                     'id' => $t->id,
-                    'date' => date('Y-m-d', strtotime($t->date)),
-                    'amount' => 'Rp. ' . number_format($t->amount, 0, ',', '.'),
-                    'icon' => $t->service->icon ?? 'build', // gunakan icon dari service jika ada
-                    'color' => '#F57C00',
-                    'service_name' => $t->service->name ?? null, // tambahkan nama service
+                    'date' => $t->date,
+                    'amount' => $t->amount,
+                    'service_name' => $t->service->name ?? 'Service',
+                    'type' => 'regular',
+                    'icon' => $t->service->icon ?? 'build',
+                    'color' => '#F57C00'
                 ];
             });
 
-        return response()->json($transactions);
+        // Get emergency requests (hanya ambil yang diperlukan)
+        $emergencies = EmergencyRequest::where('user_id', $userId)
+            ->orderBy('request_date', 'desc')
+            ->get()
+            ->map(function ($e) {
+                return [
+                    'id' => 'emergency_' . $e->id,
+                    'date' => $e->request_date,
+                    'amount' => $e->amount,
+                    'service_name' => $e->service_name,
+                    'type' => 'emergency',
+                    'icon' => 'warning',
+                    'color' => '#FF5252'
+                ];
+            });
+
+        // Combine and sort by date
+        $allTransactions = $transactions->merge($emergencies)
+            ->sortByDesc(function ($item) {
+                return $item['date'];
+            })
+            ->values();
+
+        return response()->json($allTransactions);
     }
 
     public function store(Request $request)
