@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "ALO-MONTIR",
+    "slug": "ALO-MONTIR",
+    "version": "1.0.0",
+    "permissions": "ACCESS_FINE_LOCATION",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "alomontir",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.yogans.ALOMONTIR"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-font",
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bd4cadae-f413-4a57-b9eb-c88d7d49eabd"
+      }
+    }
+  }
+}
