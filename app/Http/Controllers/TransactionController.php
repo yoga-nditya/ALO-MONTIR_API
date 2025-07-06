@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Service;
 use App\Models\Transaction;
+use App\Models\EmergencyRequest;
 use Illuminate\Http\Request;
 
 class TransactionController extends Controller
@@ -18,7 +19,7 @@ class TransactionController extends Controller
             ], 400);
         }
 
-        // Get regular transactions
+        // Get regular transactions with consistent date format
         $transactions = Transaction::with('service')
             ->where('user_id', $userId)
             ->orderBy('date', 'desc')
@@ -26,8 +27,10 @@ class TransactionController extends Controller
             ->map(function ($t) {
                 return [
                     'id' => $t->id,
-                    'date' => $t->date,
+                    'date' => $t->date->format('Y-m-d H:i:s'), // Format konsisten
+                    'display_date' => $t->date->format('d M Y'), // Untuk tampilan
                     'amount' => $t->amount,
+                    'formatted_amount' => 'Rp ' . number_format($t->amount, 0, ',', '.'),
                     'service_name' => $t->service->name ?? 'Service',
                     'type' => 'regular',
                     'icon' => $t->service->icon ?? 'build',
@@ -35,19 +38,22 @@ class TransactionController extends Controller
                 ];
             });
 
-        // Get emergency requests (hanya ambil yang diperlukan)
+        // Get emergency requests with consistent date format
         $emergencies = EmergencyRequest::where('user_id', $userId)
             ->orderBy('request_date', 'desc')
             ->get()
             ->map(function ($e) {
                 return [
                     'id' => 'emergency_' . $e->id,
-                    'date' => $e->request_date,
+                    'date' => $e->request_date->format('Y-m-d H:i:s'), // Format konsisten
+                    'display_date' => $e->request_date->format('d M Y'), // Untuk tampilan
                     'amount' => $e->amount,
+                    'formatted_amount' => 'Rp ' . number_format($e->amount, 0, ',', '.'),
                     'service_name' => $e->service_name,
                     'type' => 'emergency',
                     'icon' => 'warning',
-                    'color' => '#FF5252'
+                    'color' => '#FF5252',
+                    'status' => $e->status
                 ];
             });
 
@@ -59,6 +65,12 @@ class TransactionController extends Controller
             ->values();
 
         return response()->json($allTransactions);
+    }
+
+    public function getUserTransactions($userId)
+    {
+        // Reuse the same logic as index but with direct user ID
+        return $this->index(new Request(['user_id' => $userId]));
     }
 
     public function store(Request $request)
@@ -87,9 +99,12 @@ class TransactionController extends Controller
 
             $createdTransactions[] = [
                 'id' => $transaction->id,
-                'date' => $transaction->date,
-                'amount' => 'Rp. ' . number_format($transaction->amount, 0, ',', '.'),
+                'date' => $transaction->date->format('Y-m-d H:i:s'),
+                'display_date' => $transaction->date->format('d M Y'),
+                'amount' => $transaction->amount,
+                'formatted_amount' => 'Rp ' . number_format($transaction->amount, 0, ',', '.'),
                 'service_name' => $service->name,
+                'type' => 'regular',
                 'icon' => $service->icon ?? 'build',
                 'color' => '#F57C00',
             ];
