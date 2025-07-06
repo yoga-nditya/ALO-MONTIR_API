@@ -6,79 +6,97 @@ use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\EmergencyRequest;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class TransactionController extends Controller
 {
+    public function index(Request $request)
+    {
+        $userId = $request->query('user_id');
+
+        $transactions = Transaction::with('service')
+            ->when($userId, function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->orderBy('date', 'desc')
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'id' => $t->id,
+                    'date' => date('Y-m-d', strtotime($t->date)),
+                    'amount' => 'Rp. ' . number_format($t->amount, 0, ',', '.'),
+                    'icon' => $t->service->icon ?? 'build',
+                    'color' => '#F57C00',
+                    'service_name' => $t->service->name ?? null,
+                ];
+            });
+
+        return response()->json($transactions);
+    }
+
     public function getUserTransactions($userId)
     {
         try {
-            // Validasi user ID
-            if (!is_numeric($userId)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User ID harus berupa angka'
-                ], 400);
-            }
-
-            // Get regular transactions
-            $transactions = Transaction::with('service')
+            // Ambil transaksi regular
+            $regularTransactions = Transaction::with('service')
                 ->where('user_id', $userId)
                 ->orderBy('date', 'desc')
                 ->get()
                 ->map(function ($t) {
                     return [
-                        'id' => $t->id,
-                        'date' => $t->date->format('Y-m-d H:i:s'),
-                        'display_date' => $t->date->format('d M Y'),
+                        'id' => 'transaction_' . $t->id,
+                        'date' => $t->date,
+                        'display_date' => Carbon::parse($t->date)->format('d M Y, H:i'),
                         'amount' => $t->amount,
-                        'formatted_amount' => 'Rp ' . number_format($t->amount, 0, ',', '.'),
-                        'service_name' => $t->service->name ?? 'Service',
+                        'formatted_amount' => 'Rp. ' . number_format($t->amount, 0, ',', '.'),
+                        'service_name' => $t->service->name ?? 'Unknown Service',
                         'type' => 'regular',
                         'icon' => $t->service->icon ?? 'build',
-                        'color' => '#F57C00'
+                        'color' => '#F57C00',
+                        'status' => 'completed'
                     ];
                 });
 
-            // Get emergency requests
-            $emergencies = EmergencyRequest::where('user_id', $userId)
+            // Ambil emergency requests
+            $emergencyRequests = EmergencyRequest::where('user_id', $userId)
                 ->orderBy('request_date', 'desc')
                 ->get()
-                ->map(function ($e) {
+                ->map(function ($er) {
                     return [
-                        'id' => 'emergency_' . $e->id,
-                        'date' => $e->request_date->format('Y-m-d H:i:s'),
-                        'display_date' => $e->request_date->format('d M Y'),
-                        'amount' => $e->amount,
-                        'formatted_amount' => 'Rp ' . number_format($e->amount, 0, ',', '.'),
-                        'service_name' => $e->service_name,
+                        'id' => 'emergency_' . $er->id,
+                        'date' => $er->request_date,
+                        'display_date' => Carbon::parse($er->request_date)->format('d M Y, H:i'),
+                        'amount' => $er->amount,
+                        'formatted_amount' => 'Rp. ' . number_format($er->amount, 0, ',', '.'),
+                        'service_name' => $er->service_name ?? 'Emergency Service',
                         'type' => 'emergency',
                         'icon' => 'warning',
-                        'color' => '#FF5252',
-                        'status' => $e->status
+                        'color' => '#FF6B6B',
+                        'status' => $er->status ?? 'pending'
                     ];
                 });
 
-            // Combine and sort
-            $allTransactions = $transactions->merge($emergencies)
-                ->sortByDesc(function ($item) {
-                    return $item['date'];
-                })
-                ->values()
-                ->all(); // Convert to array
+            // Gabungkan dan urutkan berdasarkan tanggal
+            $allTransactions = $regularTransactions->concat($emergencyRequests)
+                ->sortByDesc('date')
+                ->values();
 
             return response()->json([
                 'success' => true,
-                'data' => $allTransactions
-            ]);
+                'data' => $allTransactions,
+                'message' => 'Transactions retrieved successfully'
+            ], 200);
 
         } catch (\Exception $e) {
+            \Log::error('Error fetching user transactions: ' . $e->getMessage());
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan server: ' . $e->getMessage()
+                'data' => [],
+                'message' => 'Failed to fetch transactions: ' . $e->getMessage()
             ], 500);
         }
     }
-
 
     public function store(Request $request)
     {
@@ -106,12 +124,9 @@ class TransactionController extends Controller
 
             $createdTransactions[] = [
                 'id' => $transaction->id,
-                'date' => $transaction->date->format('Y-m-d H:i:s'),
-                'display_date' => $transaction->date->format('d M Y'),
-                'amount' => $transaction->amount,
-                'formatted_amount' => 'Rp ' . number_format($transaction->amount, 0, ',', '.'),
+                'date' => $transaction->date,
+                'amount' => 'Rp. ' . number_format($transaction->amount, 0, ',', '.'),
                 'service_name' => $service->name,
-                'type' => 'regular',
                 'icon' => $service->icon ?? 'build',
                 'color' => '#F57C00',
             ];
